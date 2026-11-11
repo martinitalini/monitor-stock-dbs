@@ -1,0 +1,48 @@
+name: Monitor stock DBS a Discord
+
+on:
+  schedule:
+    # Cada 5 minutos, desplazado del minuto 00 para reducir retrasos.
+    - cron: '3/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: monitor-stock-dbs
+  cancel-in-progress: false
+
+jobs:
+  revisar-stock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Descargar archivos del repositorio
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Comprobar DBS y avisar a Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          TEST_MODE: ${{ github.event_name == 'workflow_dispatch' }}
+        run: python monitor.py
+
+      - name: Guardar estado entre ejecuciones
+        run: |
+          if [ -f estado.json ]; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add estado.json
+            if ! git diff --cached --quiet; then
+              git commit -m 'Actualiza estado de stock DBS [skip ci]'
+              git push
+            fi
+          fi
